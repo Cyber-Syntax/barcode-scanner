@@ -21,6 +21,10 @@ COPIED_FEEDBACK_MS = 1500
 ERROR_FG = "#b00020"
 OK_FG = "#1b6e2d"
 FONT_SIZE = 24
+ZOOM_STEP = 0.25
+MIN_ZOOM = 0.25
+MAX_ZOOM = 4.0
+MOUSE_WHEEL_UP = 4
 PREFERRED_FONT_FAMILIES = (
     "Segoe UI",
     "DejaVu Sans",
@@ -79,6 +83,8 @@ class App(tk.Tk):
         self._preview_src: Image.Image | None = None
         self._preview_tk: ImageTk.PhotoImage | None = None
         self._resize_after: str | None = None
+        self._zoom = 1.0
+        self._zoom_label: ttk.Label | None = None
 
         self._build_ui()
 
@@ -99,9 +105,7 @@ class App(tk.Tk):
         paned.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
         preview_frame = ttk.LabelFrame(paned, text="Preview")
-        self.preview_label = ttk.Label(preview_frame, anchor="center")
-        self.preview_label.pack(fill="both", expand=True)
-        preview_frame.bind("<Configure>", self._on_preview_resize)
+        self._build_preview(preview_frame)
         paned.add(preview_frame, weight=3)
 
         results_frame = ttk.LabelFrame(paned, text="Detected barcodes")
@@ -135,6 +139,47 @@ class App(tk.Tk):
         )
         paned.add(results_frame, weight=2)
 
+    def _build_preview(self, preview_frame: ttk.LabelFrame) -> None:
+        preview_controls = ttk.Frame(preview_frame)
+        preview_controls.pack(fill="x", padx=6, pady=(4, 0))
+        ttk.Button(
+            preview_controls, text="-", width=3, command=self._zoom_out
+        ).pack(side="left")
+        ttk.Button(
+            preview_controls, text="100%", command=self._reset_zoom
+        ).pack(side="left", padx=4)
+        ttk.Button(
+            preview_controls, text="+", width=3, command=self._zoom_in
+        ).pack(side="left")
+        self._zoom_label = ttk.Label(preview_controls, text="Fit")
+        self._zoom_label.pack(side="left", padx=8)
+
+        preview_body = ttk.Frame(preview_frame)
+        preview_body.pack(fill="both", expand=True, pady=(4, 0))
+        preview_xscroll = ttk.Scrollbar(preview_body, orient="horizontal")
+        preview_yscroll = ttk.Scrollbar(preview_body, orient="vertical")
+        self.preview_canvas = tk.Canvas(
+            preview_body,
+            highlightthickness=0,
+            xscrollcommand=preview_xscroll.set,
+            yscrollcommand=preview_yscroll.set,
+        )
+        preview_xscroll.configure(command=self.preview_canvas.xview)
+        preview_yscroll.configure(command=self.preview_canvas.yview)
+        preview_xscroll.pack(side="bottom", fill="x")
+        preview_yscroll.pack(side="right", fill="y")
+        self.preview_canvas.pack(side="left", fill="both", expand=True)
+        self._preview_item = self.preview_canvas.create_image(
+            0, 0, anchor="center"
+        )
+        self.preview_canvas.bind("<Configure>", self._on_preview_resize)
+        self.preview_canvas.bind("<MouseWheel>", self._on_preview_wheel)
+        self.preview_canvas.bind("<Button-4>", self._on_preview_wheel)
+        self.preview_canvas.bind("<Button-5>", self._on_preview_wheel)
+        self.preview_canvas.bind("<ButtonPress-1>", self._start_preview_pan)
+        self.preview_canvas.bind("<B1-Motion>", self._pan_preview)
+        preview_frame.bind("<Configure>", self._on_preview_resize)
+
     def _on_wheel(self, event: tk.Event) -> None:
         self.canvas.yview_scroll(int(-event.delta / 120), "units")
 
@@ -144,17 +189,68 @@ class App(tk.Tk):
             self.after_cancel(self._resize_after)
         self._resize_after = self.after(60, self._render_preview)
 
+    def _on_preview_wheel(self, event: tk.Event) -> str:
+        if getattr(event, "num", None) == MOUSE_WHEEL_UP or event.delta > 0:
+            self._zoom_in()
+        else:
+            self._zoom_out()
+        return "break"
+
+    def _start_preview_pan(self, event: tk.Event) -> None:
+        self.preview_canvas.scan_mark(event.x, event.y)
+
+    def _pan_preview(self, event: tk.Event) -> None:
+        self.preview_canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def _set_zoom(self, zoom: float) -> None:
+        self._zoom = min(MAX_ZOOM, max(MIN_ZOOM, zoom))
+        self._render_preview()
+
+    def _zoom_in(self) -> None:
+        self._set_zoom(self._zoom + ZOOM_STEP)
+
+    def _zoom_out(self) -> None:
+        self._set_zoom(self._zoom - ZOOM_STEP)
+
+    def _reset_zoom(self) -> None:
+        self._set_zoom(1.0)
+
     def _render_preview(self) -> None:
         self._resize_after = None
         if self._preview_src is None:
             return
-        w = max(self.preview_label.winfo_width(), 50)
-        h = max(self.preview_label.winfo_height(), 50)
+        w = max(self.preview_canvas.winfo_width(), 50)
+        h = max(self.preview_canvas.winfo_height(), 50)
         fitted = ImageOps.contain(
             self._preview_src, (w, h), Image.Resampling.LANCZOS
         )
-        self._preview_tk = ImageTk.PhotoImage(fitted)  # keep a reference
-        self.preview_label.configure(image=self._preview_tk)
+        if self._zoom != 1.0:
+            fitted = fitted.resize(
+                (
+                    max(1, round(fitted.width * self._zoom)),
+                    max(1, round(fitted.height * self._zoom)),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+        self._preview_tk = ImageTk.PhotoImage(fitted)
+        self.preview_canvas.itemconfigure(
+            self._preview_item, image=self._preview_tk
+        )
+        center_x = max(w, fitted.width) / 2
+        center_y = max(h, fitted.height) / 2
+        self.preview_canvas.coords(self._preview_item, center_x, center_y)
+        self.preview_canvas.configure(
+            scrollregion=(
+                0,
+                0,
+                max(w, fitted.width),
+                max(h, fitted.height),
+            )
+        )
+        if self._zoom_label is not None:
+            self._zoom_label.configure(
+                text="Fit" if self._zoom == 1.0 else f"{self._zoom:.0%}"
+            )
 
     # ---------- State helpers ----------
     def _set_status(self, text: str, color: str | None = None) -> None:
