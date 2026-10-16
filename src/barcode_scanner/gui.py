@@ -4,6 +4,7 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import filedialog, ttk
+from tkinter import font as tkfont
 
 from PIL import Image, ImageOps, ImageTk
 
@@ -18,22 +19,57 @@ from .decoder import (
 COPIED_FEEDBACK_MS = 1500
 ERROR_FG = "#b00020"
 OK_FG = "#1b6e2d"
-UI_FONT = ("DejaVu Sans", 12)
-HEADING_FONT = ("DejaVu Sans", 12, "bold")
+FONT_SIZE = 24
+PREFERRED_FONT_FAMILIES = (
+    "Segoe UI",
+    "DejaVu Sans",
+    "Liberation Sans",
+    "Arial",
+)
 
 
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         style = ttk.Style(self)
-        style.configure(".", font=UI_FONT)
-        style.configure("TButton", font=UI_FONT, padding=(10, 6))
-        style.configure("TEntry", font=UI_FONT)
-        style.configure("TLabelframe.Label", font=HEADING_FONT)
+        available_fonts = set(tkfont.families(self))
+        font_family = next(
+            (
+                family
+                for family in PREFERRED_FONT_FAMILIES
+                if family in available_fonts
+            ),
+            tkfont.nametofont("TkDefaultFont").actual()["family"],
+        )
+        ui_font = (font_family, FONT_SIZE)
+        heading_font = (font_family, FONT_SIZE, "bold")
+        self._heading_font = heading_font
+
+        for name in (
+            "TkDefaultFont",
+            "TkTextFont",
+            "TkMenuFont",
+            "TkHeadingFont",
+            "TkCaptionFont",
+            "TkSmallCaptionFont",
+            "TkIconFont",
+            "TkTooltipFont",
+        ):
+            try:
+                font = tkfont.nametofont(name)
+                font.configure(family=font_family, size=FONT_SIZE)
+            except tk.TclError:
+                pass
+
+        style.configure(".", font=ui_font)
+        style.configure("TButton", font=ui_font, padding=(16, 10))
+        style.configure("TEntry", font=ui_font)
+        style.configure("TLabel", font=ui_font)
+        style.configure("TLabelframe.Label", font=heading_font)
 
         self.title("Barcode Scanner")
-        self.geometry("900x700")
-        self.minsize(640, 480)
+        self.geometry("1200x900")
+        self.minsize(900, 700)
 
         self._queue: queue.Queue = queue.Queue()
         self._job = 0  # token to discard stale worker results
@@ -199,7 +235,7 @@ class App(tk.Tk):
         for col, title in enumerate(
             ("Barcode type", "Decoded value", "Action")
         ):
-            ttk.Label(self.results, text=title, font=HEADING_FONT).grid(
+            ttk.Label(self.results, text=title, font=self._heading_font).grid(
                 row=0, column=col, sticky="w", padx=6, pady=(4, 2)
             )
         for i, res in enumerate(found, start=1):
