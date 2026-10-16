@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import queue
 import threading
 import tkinter as tk
@@ -31,6 +33,8 @@ PREFERRED_FONT_FAMILIES = (
     "Liberation Sans",
     "Arial",
 )
+APP_CONFIG_NAME = "barcode-scanner"
+LAST_IMPORT_DIR_KEY = "last_import_dir"
 
 
 class App(tk.Tk):
@@ -85,6 +89,7 @@ class App(tk.Tk):
         self._resize_after: str | None = None
         self._zoom = 1.0
         self._zoom_label: ttk.Label | None = None
+        self._last_import_dir = self._load_last_import_dir()
 
         self._build_ui()
 
@@ -267,6 +272,37 @@ class App(tk.Tk):
             self.results, text=text, foreground=color or "", padding=12
         ).pack(anchor="w")
 
+    def _config_path(self) -> Path:
+        if os.name == "nt":
+            config_root = Path(
+                os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")
+            )
+        else:
+            config_root = Path(
+                os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+            )
+        return config_root / APP_CONFIG_NAME / "settings.json"
+
+    def _load_last_import_dir(self) -> Path:
+        fallback = Path.cwd()
+        try:
+            config = json.loads(self._config_path().read_text())
+            saved_dir = Path(config[LAST_IMPORT_DIR_KEY])
+            return saved_dir if saved_dir.is_dir() else fallback
+        except (OSError, KeyError, TypeError, ValueError):
+            return fallback
+
+    def _save_last_import_dir(self, directory: Path) -> None:
+        try:
+            config_path = self._config_path()
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps({LAST_IMPORT_DIR_KEY: str(directory)})
+            )
+        except OSError:
+            # A read-only home directory should not prevent importing images.
+            pass
+
     # ---------- Import flow ----------
     def _on_import(self) -> None:
         if self._busy:
@@ -275,10 +311,14 @@ class App(tk.Tk):
         path = filedialog.askopenfilename(
             title="Select a barcode image",
             filetypes=[("Images", pattern), ("All files", "*.*")],
+            initialdir=str(self._last_import_dir),
+            parent=self,
         )
         if not path:
             return
 
+        self._last_import_dir = Path(path).parent
+        self._save_last_import_dir(self._last_import_dir)
         self.image_name.configure(text=Path(path).name)
         self._job += 1
         self._busy = True
