@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import threading
@@ -18,6 +19,8 @@ from .decoder import (
     decode_barcodes,
     load_image,
 )
+
+log = logging.getLogger(__name__)
 
 COPIED_FEEDBACK_MS = 1500
 ERROR_FG = "#b00020"
@@ -284,13 +287,22 @@ class App(tk.Tk):
         return config_root / APP_CONFIG_NAME / "settings.json"
 
     def _load_last_import_dir(self) -> Path:
-        fallback = Path.cwd()
+        fallback = Path.home()
         try:
             config = json.loads(self._config_path().read_text())
             saved_dir = Path(config[LAST_IMPORT_DIR_KEY])
             return saved_dir if saved_dir.is_dir() else fallback
         except (OSError, KeyError, TypeError, ValueError):
             return fallback
+
+    def _initial_dir(self) -> str:
+        directory = self._last_import_dir
+        try:
+            if not directory.is_dir():
+                directory = Path.home()
+        except OSError:
+            directory = Path.home()
+        return os.path.normpath(str(directory))
 
     def _save_last_import_dir(self, directory: Path) -> None:
         try:
@@ -300,8 +312,7 @@ class App(tk.Tk):
                 json.dumps({LAST_IMPORT_DIR_KEY: str(directory)})
             )
         except OSError:
-            # A read-only home directory should not prevent importing images.
-            pass
+            log.warning("Could not save settings", exc_info=True)
 
     # ---------- Import flow ----------
     def _on_import(self) -> None:
@@ -311,7 +322,7 @@ class App(tk.Tk):
         path = filedialog.askopenfilename(
             title="Select a barcode image",
             filetypes=[("Images", pattern), ("All files", "*.*")],
-            initialdir=str(self._last_import_dir),
+            initialdir=self._initial_dir(),
             parent=self,
         )
         if not path:
@@ -406,10 +417,14 @@ class App(tk.Tk):
 
 
 def main() -> None:
-    try:  # crisp rendering on high-DPI displays
-        import ctypes
+    if os.name == "nt":
+        try:
+            import ctypes
 
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-    except Exception:
-        pass
+            try:
+                ctypes.windll.user32.SetProcessDpiAwarenessContext(-4)
+            except Exception:
+                ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            log.warning("Could not set DPI awareness", exc_info=True)
     App().mainloop()
