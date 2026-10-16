@@ -72,6 +72,7 @@ class App(tk.Tk):
         self.minsize(900, 700)
 
         self._queue: queue.Queue = queue.Queue()
+        self._value_vars: list[tk.StringVar] = []
         self._job = 0  # token to discard stale worker results
         self._busy = False
         self._preview_src: Image.Image | None = None
@@ -157,6 +158,7 @@ class App(tk.Tk):
         self.status.configure(text=text, foreground=color or "")
 
     def _clear_results(self) -> None:
+        self._value_vars.clear()
         for child in self.results.winfo_children():
             child.destroy()
 
@@ -244,6 +246,7 @@ class App(tk.Tk):
             )
             # Readonly Entry: text is selectable, long values don't wrap oddly.
             var = tk.StringVar(value=res.value)
+            self._value_vars.append(var)
             ttk.Entry(self.results, textvariable=var, state="readonly").grid(
                 row=i, column=1, sticky="ew", padx=6, pady=3
             )
