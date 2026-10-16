@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, ttk
 from tkinter import font as tkfont
 
@@ -89,6 +90,8 @@ class App(tk.Tk):
             top, text="Import Image", command=self._on_import
         )
         self.import_btn.pack(side="left")
+        self.image_name = ttk.Label(top, text="No image selected", anchor="w")
+        self.image_name.pack(side="left", padx=(16, 0), fill="x", expand=True)
         self.status = ttk.Label(top, text="Import an image to begin.")
         self.status.pack(side="left", padx=12)
 
@@ -180,6 +183,7 @@ class App(tk.Tk):
         if not path:
             return
 
+        self.image_name.configure(text=Path(path).name)
         self._job += 1
         self._busy = True
         self.import_btn.state(["disabled"])
