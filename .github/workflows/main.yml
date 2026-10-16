@@ -1,0 +1,30 @@
+name: Build Executables
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.15", architecture: x64 }
+      - run: uv sync --group dev
+      - run: >
+          uv run pyinstaller --noconfirm --onefile --windowed
+          --name barcode-scanner --paths src
+          --collect-binaries pyzbar src/barcode_scanner/main.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: barcode-scanner-exe
+          path: dist/barcode-scanner.exe
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: v${{ github.run_number }}
+          generate_release_notes: true
+          files: dist/barcode-scanner.exe
