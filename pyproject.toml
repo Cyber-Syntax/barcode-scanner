@@ -6,7 +6,7 @@ description = 'Scan images and return the numbers from EAN and similar barcodes.
 requires-python = ">= 3.12"
 authors = [{ name = "Cyber-Syntax" }]
 dependencies = [
-    "pillow>=12.3.0",
+    "pillow>=13.0.0",
     "pyzbar>=0.1.9",
 ]
 classifiers = [
