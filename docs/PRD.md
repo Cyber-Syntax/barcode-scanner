@@ -23,6 +23,8 @@ The goal is to replace manual barcode-reading tools with a simple GUI that lets 
 - Allow employees to select an image through the standard Windows file picker.
 - Display a preview of the imported image.
 - Allow employees to import another image without restarting the application.
+- Provide a user-triggered **Screenshot** action that captures a selected screen region.
+- Allow screenshot selection to be cancelled without replacing the current image or results.
 
 ### 3.2 Barcode Detection
 
@@ -58,6 +60,7 @@ Each Copy button must copy only its associated barcode value to the Windows clip
 - If an image cannot be opened, display a clear error message.
 - If image decoding fails, allow the employee to retry with another image.
 - Keep the application responsive and prevent crashes caused by invalid or unsupported images.
+- Report unavailable screenshot capabilities explicitly on platforms that do not support them.
 
 ## 4. Basic User Workflow
 
