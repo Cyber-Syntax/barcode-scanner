@@ -4,6 +4,7 @@ import pytest
 from PIL import Image
 
 from barcode_scanner.capture import ScreenCaptureError, capture_screen_region
+from barcode_scanner.gui import MIN_WINDOW_SIZE
 
 
 def test_capture_screen_region_returns_selected_pixels():
@@ -42,3 +43,7 @@ def test_capture_screen_region_rejects_empty_selection():
             (10, 10, 10, 20),
             grabber=lambda: Image.new("RGB", (20, 20)),
         )
+
+
+def test_minimum_window_size_is_cross_platform_baseline():
+    assert MIN_WINDOW_SIZE == (640, 480)

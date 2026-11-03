@@ -82,6 +82,24 @@ def _decode_value(raw: bytes) -> str:
         return raw.decode("latin-1")
 
 
+def sort_results(results: list[BarcodeResult]) -> list[BarcodeResult]:
+    """Return results in visual order, preserving decoder order for ties."""
+    return [
+        result
+        for _index, result in sorted(
+            enumerate(results), key=lambda item: (item[1].rect[1], item[1].rect[0], item[0])
+        )
+    ]
+
+
+def first_code128(results: list[BarcodeResult]) -> BarcodeResult | None:
+    """Return the first Code 128 in visual order, if one was detected."""
+    for result in sort_results(results):
+        if result.symbology == "Code 128":
+            return result
+    return None
+
+
 def decode_barcodes(image: Image.Image) -> list[BarcodeResult]:
     """Decode all 1D barcodes in `image`.
 
@@ -117,5 +135,4 @@ def decode_barcodes(image: Image.Image) -> list[BarcodeResult]:
             rect = tuple(int(v / scale) for v in (r.left, r.top, r.width, r.height))
             results.append(BarcodeResult(sym, value, rect))  # type: ignore[arg-type]
 
-    results.sort(key=lambda r: (r.rect[1], r.rect[0]))  # top-to-bottom, left-to-right
-    return results
+    return sort_results(results)

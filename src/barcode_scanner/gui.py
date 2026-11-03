@@ -22,7 +22,9 @@ from .decoder import (
     BarcodeResult,
     ImageLoadError,
     decode_barcodes,
+    first_code128,
     load_image,
+    sort_results,
 )
 
 log = logging.getLogger(__name__)
@@ -35,6 +37,8 @@ ZOOM_STEP = 0.25
 MIN_ZOOM = 0.25
 MAX_ZOOM = 4.0
 MOUSE_WHEEL_UP = 4
+MOUSE_WHEEL_DOWN = 5
+MIN_WINDOW_SIZE = (640, 480)
 PREFERRED_FONT_FAMILIES = (
     "Segoe UI",
     "DejaVu Sans",
@@ -86,7 +90,7 @@ class App(tk.Tk):
 
         self.title("Barcode Scanner")
         self.geometry("1200x900")
-        self.minsize(900, 700)
+        self.minsize(*MIN_WINDOW_SIZE)
 
         self._queue: queue.Queue = queue.Queue()
         self._value_vars: list[tk.StringVar] = []
@@ -96,7 +100,6 @@ class App(tk.Tk):
         self._preview_tk: ImageTk.PhotoImage | None = None
         self._resize_after: str | None = None
         self._zoom = 1.0
-        self._zoom_label: ttk.Label | None = None
         self._last_import_dir = self._load_last_import_dir()
         self._selection_window: tk.Toplevel | None = None
         self._selection_canvas: tk.Canvas | None = None
@@ -153,32 +156,12 @@ class App(tk.Tk):
             "<Configure>",
             lambda e: self.canvas.itemconfigure(self._win, width=e.width),
         )
-        self.canvas.bind(
-            "<Enter>",
-            lambda e: self.canvas.bind_all("<MouseWheel>", self._on_wheel),
-        )
-        self.canvas.bind(
-            "<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>")
-        )
+        self._bind_scoped_wheel(self.canvas, self._on_wheel)
         paned.add(results_frame, weight=2)
 
     def _build_preview(self, preview_frame: ttk.LabelFrame) -> None:
-        preview_controls = ttk.Frame(preview_frame)
-        preview_controls.pack(fill="x", padx=6, pady=(4, 0))
-        ttk.Button(
-            preview_controls, text="-", width=3, command=self._zoom_out
-        ).pack(side="left")
-        ttk.Button(
-            preview_controls, text="100%", command=self._reset_zoom
-        ).pack(side="left", padx=4)
-        ttk.Button(
-            preview_controls, text="+", width=3, command=self._zoom_in
-        ).pack(side="left")
-        self._zoom_label = ttk.Label(preview_controls, text="Fit")
-        self._zoom_label.pack(side="left", padx=8)
-
         preview_body = ttk.Frame(preview_frame)
-        preview_body.pack(fill="both", expand=True, pady=(4, 0))
+        preview_body.pack(fill="both", expand=True)
         preview_xscroll = ttk.Scrollbar(preview_body, orient="horizontal")
         preview_yscroll = ttk.Scrollbar(preview_body, orient="vertical")
         self.preview_canvas = tk.Canvas(
@@ -196,15 +179,44 @@ class App(tk.Tk):
             0, 0, anchor="center"
         )
         self.preview_canvas.bind("<Configure>", self._on_preview_resize)
-        self.preview_canvas.bind("<MouseWheel>", self._on_preview_wheel)
-        self.preview_canvas.bind("<Button-4>", self._on_preview_wheel)
-        self.preview_canvas.bind("<Button-5>", self._on_preview_wheel)
+        self._bind_wheel(self.preview_canvas, self._on_preview_wheel)
         self.preview_canvas.bind("<ButtonPress-1>", self._start_preview_pan)
         self.preview_canvas.bind("<B1-Motion>", self._pan_preview)
         preview_frame.bind("<Configure>", self._on_preview_resize)
 
-    def _on_wheel(self, event: tk.Event) -> None:
-        self.canvas.yview_scroll(int(-event.delta / 120), "units")
+    @staticmethod
+    def _bind_wheel(widget: tk.Widget, callback) -> None:
+        for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            widget.bind(sequence, callback)
+
+    @staticmethod
+    def _bind_scoped_wheel(widget: tk.Widget, callback) -> None:
+        sequences = ("<MouseWheel>", "<Button-4>", "<Button-5>")
+
+        def bind(_event: tk.Event) -> None:
+            for sequence in sequences:
+                widget.bind_all(sequence, callback)
+
+        def unbind(_event: tk.Event) -> None:
+            for sequence in sequences:
+                widget.unbind_all(sequence)
+
+        widget.bind("<Enter>", bind)
+        widget.bind("<Leave>", unbind)
+
+    def _on_wheel(self, event: tk.Event) -> str:
+        direction = self._wheel_direction(event)
+        self.canvas.yview_scroll(-direction, "units")
+        return "break"
+
+    @staticmethod
+    def _wheel_direction(event: tk.Event) -> int:
+        num = getattr(event, "num", None)
+        if num == MOUSE_WHEEL_UP:
+            return 1
+        if num == MOUSE_WHEEL_DOWN:
+            return -1
+        return 1 if getattr(event, "delta", 0) > 0 else -1
 
     # ---------- Preview ----------
     def _on_preview_resize(self, _event: tk.Event) -> None:
@@ -213,7 +225,7 @@ class App(tk.Tk):
         self._resize_after = self.after(60, self._render_preview)
 
     def _on_preview_wheel(self, event: tk.Event) -> str:
-        if getattr(event, "num", None) == MOUSE_WHEEL_UP or event.delta > 0:
+        if self._wheel_direction(event) > 0:
             self._zoom_in()
         else:
             self._zoom_out()
@@ -270,10 +282,6 @@ class App(tk.Tk):
                 max(h, fitted.height),
             )
         )
-        if self._zoom_label is not None:
-            self._zoom_label.configure(
-                text="Fit" if self._zoom == 1.0 else f"{self._zoom:.0%}"
-            )
 
     # ---------- State helpers ----------
     def _set_status(self, text: str, color: str | None = None) -> None:
@@ -398,9 +406,11 @@ class App(tk.Tk):
         if kind == "ok":
             img, found = payload
             self._preview_src = img
+            self._zoom = 1.0
             self.image_name.configure(text=self._pending_image_name)
             self._render_preview()
             self._show_results(found)
+            self._auto_copy_code128(found)
         else:
             self._set_status("Error", ERROR_FG)
             self._set_status(payload, ERROR_FG)
@@ -490,6 +500,7 @@ class App(tk.Tk):
             return
 
         self._set_status(f"Found {len(found)} barcode(s).", OK_FG)
+        found = sort_results(found)
         self.results.columnconfigure(1, weight=1)
         for col, title in enumerate(
             ("Barcode type", "Decoded value", "Action")
@@ -510,6 +521,21 @@ class App(tk.Tk):
             btn = ttk.Button(self.results, text="Copy", width=10)
             btn.configure(command=lambda v=res.value, b=btn: self._copy(v, b))
             btn.grid(row=i, column=2, padx=6, pady=3)
+
+    def _auto_copy_code128(self, found: list[BarcodeResult]) -> None:
+        result = first_code128(found)
+        if result is None:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(result.value)
+        self.update()
+        self._set_status("Code 128 copied!", OK_FG)
+        self.after(
+            COPIED_FEEDBACK_MS,
+            lambda: self._set_status(
+                f"Found {len(found)} barcode(s).", OK_FG
+            ),
+        )
 
     def _copy(self, value: str, btn: ttk.Button) -> None:
         self.clipboard_clear()
