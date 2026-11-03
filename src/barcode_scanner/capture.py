@@ -1,5 +1,8 @@
 """Screen-region capture adapter."""
 
+# Turkish user-facing messages intentionally use locale-specific characters.
+# ruff: noqa: RUF001
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -21,7 +24,7 @@ def grab_screen() -> Image.Image:
     try:
         return ImageGrab.grab()
     except (OSError, ValueError) as exc:
-        message = f"Could not capture screen: {exc}"
+        message = f"Ekran görüntüsü alınamadı: {exc}"
         raise ScreenCaptureError(message) from exc
 
 
@@ -39,12 +42,12 @@ def capture_screen_region(
 
     left, top, right, bottom = region
     if right <= left or bottom <= top:
-        message = "Select an area larger than zero pixels."
+        message = "Sıfır pikselden büyük bir alan seçin."
         raise ScreenCaptureError(message)
 
     try:
         screen = grabber()
         return screen.crop((left, top, right, bottom)).convert("RGB")
     except (OSError, ValueError) as exc:
-        message = f"Could not capture screen: {exc}"
+        message = f"Ekran görüntüsü alınamadı: {exc}"
         raise ScreenCaptureError(message) from exc

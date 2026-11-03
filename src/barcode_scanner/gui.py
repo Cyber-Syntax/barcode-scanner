@@ -1,3 +1,6 @@
+# Turkish user-facing messages intentionally use locale-specific characters.
+# ruff: noqa: RUF001
+
 from __future__ import annotations
 
 import json
@@ -88,7 +91,7 @@ class App(tk.Tk):
         style.configure("TLabel", font=ui_font)
         style.configure("TLabelframe.Label", font=heading_font)
 
-        self.title("Barcode Scanner")
+        self.title("Barkod Tarayıcı")
         self.geometry("1200x900")
         self.minsize(*MIN_WINDOW_SIZE)
 
@@ -115,26 +118,28 @@ class App(tk.Tk):
         top = ttk.Frame(self, padding=8)
         top.pack(fill="x")
         self.import_btn = ttk.Button(
-            top, text="Import Image", command=self._on_import
+            top, text="Görsel İçe Aktar", command=self._on_import
         )
         self.import_btn.pack(side="left")
         self.screenshot_btn = ttk.Button(
-            top, text="Screenshot", command=self._on_screenshot
+            top, text="Ekran Görüntüsü", command=self._on_screenshot
         )
         self.screenshot_btn.pack(side="left", padx=(8, 0))
-        self.image_name = ttk.Label(top, text="No image selected", anchor="w")
+        self.image_name = ttk.Label(top, text="Görsel seçilmedi", anchor="w")
         self.image_name.pack(side="left", padx=(16, 0), fill="x", expand=True)
-        self.status = ttk.Label(top, text="Import an image to begin.")
+        self.status = ttk.Label(
+            top, text="Başlamak için bir görsel içe aktarın."
+        )
         self.status.pack(side="left", padx=12)
 
         paned = ttk.PanedWindow(self, orient="vertical")
         paned.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-        preview_frame = ttk.LabelFrame(paned, text="Preview")
+        preview_frame = ttk.LabelFrame(paned, text="Önizleme")
         self._build_preview(preview_frame)
         paned.add(preview_frame, weight=3)
 
-        results_frame = ttk.LabelFrame(paned, text="Detected barcodes")
+        results_frame = ttk.LabelFrame(paned, text="Algılanan barkodlar")
         self.canvas = tk.Canvas(results_frame, highlightthickness=0)
         vsb = ttk.Scrollbar(
             results_frame, orient="vertical", command=self.canvas.yview
@@ -343,8 +348,8 @@ class App(tk.Tk):
             return
         pattern = " ".join(f"*{ext}" for ext in SUPPORTED_EXTENSIONS)
         path = filedialog.askopenfilename(
-            title="Select a barcode image",
-            filetypes=[("Images", pattern), ("All files", "*.*")],
+            title="Barkod görseli seçin",
+            filetypes=[("Görseller", pattern), ("Tüm dosyalar", "*.*")],
             initialdir=self._initial_dir(),
             parent=self,
         )
@@ -367,7 +372,7 @@ class App(tk.Tk):
         self._busy = True
         self.import_btn.state(["disabled"])
         self.screenshot_btn.state(["disabled"])
-        self._set_status("Reading barcodes…")
+        self._set_status("Barkodlar okunuyor…")
         threading.Thread(
             target=self._work,
             args=(self._job, path, image),
@@ -386,7 +391,7 @@ class App(tk.Tk):
             self._queue.put((token, "error", str(exc)))
         except Exception as exc:  # never let a worker crash silently
             self._queue.put(
-                (token, "error", f"Unexpected error while decoding: {exc}")
+                (token, "error", f"Barkodlar okunurken beklenmeyen hata: {exc}")
             )
 
     def _poll(self) -> None:
@@ -412,7 +417,7 @@ class App(tk.Tk):
             self._show_results(found)
             self._auto_copy_code128(found)
         else:
-            self._set_status("Error", ERROR_FG)
+            self._set_status("Hata", ERROR_FG)
             self._set_status(payload, ERROR_FG)
 
     # ---------- Screenshot flow ----------
@@ -480,7 +485,7 @@ class App(tk.Tk):
             return
         self._cancel_selection()
         if image is not None:
-            self._start_processing(image=image, image_name="Screenshot")
+            self._start_processing(image=image, image_name="Ekran görüntüsü")
 
     def _cancel_selection(self) -> None:
         if self._selection_window is not None:
@@ -495,15 +500,17 @@ class App(tk.Tk):
     def _show_results(self, found: list[BarcodeResult]) -> None:
         self._clear_results()
         if not found:
-            self._set_status("No barcodes detected.", ERROR_FG)
-            self._show_message("No barcodes detected. Try another image.")
+            self._set_status("Barkod algılanmadı.", ERROR_FG)
+            self._show_message(
+                "Barkod algılanmadı. Başka bir görsel deneyin."
+            )
             return
 
-        self._set_status(f"Found {len(found)} barcode(s).", OK_FG)
+        self._set_status(f"{len(found)} barkod bulundu.", OK_FG)
         found = sort_results(found)
         self.results.columnconfigure(1, weight=1)
         for col, title in enumerate(
-            ("Barcode type", "Decoded value", "Action")
+            ("Barkod türü", "Okunan değer", "İşlem")
         ):
             ttk.Label(self.results, text=title, font=self._heading_font).grid(
                 row=0, column=col, sticky="w", padx=6, pady=(4, 2)
@@ -518,7 +525,7 @@ class App(tk.Tk):
             ttk.Entry(self.results, textvariable=var, state="readonly").grid(
                 row=i, column=1, sticky="ew", padx=6, pady=3
             )
-            btn = ttk.Button(self.results, text="Copy", width=10)
+            btn = ttk.Button(self.results, text="Kopyala", width=10)
             btn.configure(command=lambda v=res.value, b=btn: self._copy(v, b))
             btn.grid(row=i, column=2, padx=6, pady=3)
 
@@ -529,11 +536,11 @@ class App(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(result.value)
         self.update()
-        self._set_status("Code 128 copied!", OK_FG)
+        self._set_status("Code 128 kopyalandı!", OK_FG)
         self.after(
             COPIED_FEEDBACK_MS,
             lambda: self._set_status(
-                f"Found {len(found)} barcode(s).", OK_FG
+                f"{len(found)} barkod bulundu.", OK_FG
             ),
         )
 
@@ -541,10 +548,10 @@ class App(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(value)
         self.update()  # flush so the data is committed to the Windows clipboard
-        btn.configure(text="Copied!")
+        btn.configure(text="Kopyalandı!")
         self.after(
             COPIED_FEEDBACK_MS,
-            lambda: btn.winfo_exists() and btn.configure(text="Copy"),
+            lambda: btn.winfo_exists() and btn.configure(text="Kopyala"),
         )
 
 
