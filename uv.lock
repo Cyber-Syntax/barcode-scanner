@@ -100,6 +100,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-env" },
+    { name = "python-barcode" },
 ]
 lint = [
     { name = "ruff" },
@@ -119,6 +120,7 @@ dev = [
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-cov", specifier = ">=4" },
     { name = "pytest-env", specifier = ">=1.4.0" },
+    { name = "python-barcode", specifier = ">=0.16.1" },
 ]
 lint = [{ name = "ruff", specifier = ">=0.15" }]
 
@@ -1026,6 +1028,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/32/72/d3e125d18f798b2968430b77dba991c69df354ec649db4c1480ac9bc2ab4/pytest_env-1.7.1.tar.gz", hash = "sha256:f2c5aed2621dbfc73c2866a710e2e456409495c5ac10905612c9509b3ee631a2", size = 17091, upload-time = "2026-09-08T14:49:44.487Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/82/fd9f2855bb9d48022942c2123f287d006b7569ae9b2cae8939f94a25fdf6/pytest_env-1.7.1-py3-none-any.whl", hash = "sha256:22341b945305b65ef4e53d7c678982cfd64b5c5800afdf7d37caad2362ea002c", size = 10361, upload-time = "2026-09-08T14:49:43.288Z" },
+]
+
+[[package]]
+name = "python-barcode"
+version = "0.16.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/f2/4c0b07f100e1e184ba682021322c336bbba6aa7adfabd2616f70eff917d9/python_barcode-0.16.1.tar.gz", hash = "sha256:665ed09516b0088b5593061c5ac8662caa0b08d56bdad328388b1cab39939ac5", size = 233777, upload-time = "2025-08-27T11:05:45.614Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/34/810885dca784b02e5ad0f71ced9c06ba5e9d33a6493bc886f7470ce82a39/python_barcode-0.16.1-py3-none-any.whl", hash = "sha256:5776567478c9a0dae473374bb86631ba0b5ea99aaf302763b364e367ac51f367", size = 228046, upload-time = "2025-08-27T11:05:42.776Z" },
 ]
 
 [[package]]
