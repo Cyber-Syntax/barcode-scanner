@@ -12,6 +12,11 @@ from tkinter import font as tkfont
 
 from PIL import Image, ImageOps, ImageTk
 
+from .capture import (
+    ScreenCaptureError,
+    capture_screen_region,
+    grab_screen,
+)
 from .decoder import (
     SUPPORTED_EXTENSIONS,
     BarcodeResult,
@@ -93,6 +98,12 @@ class App(tk.Tk):
         self._zoom = 1.0
         self._zoom_label: ttk.Label | None = None
         self._last_import_dir = self._load_last_import_dir()
+        self._selection_window: tk.Toplevel | None = None
+        self._selection_canvas: tk.Canvas | None = None
+        self._selection_start: tuple[int, int] | None = None
+        self._selection_image: Image.Image | None = None
+        self._selection_tk: ImageTk.PhotoImage | None = None
+        self._pending_image_name = ""
 
         self._build_ui()
 
@@ -104,6 +115,10 @@ class App(tk.Tk):
             top, text="Import Image", command=self._on_import
         )
         self.import_btn.pack(side="left")
+        self.screenshot_btn = ttk.Button(
+            top, text="Screenshot", command=self._on_screenshot
+        )
+        self.screenshot_btn.pack(side="left", padx=(8, 0))
         self.image_name = ttk.Label(top, text="No image selected", anchor="w")
         self.image_name.pack(side="left", padx=(16, 0), fill="x", expand=True)
         self.status = ttk.Label(top, text="Import an image to begin.")
@@ -330,20 +345,33 @@ class App(tk.Tk):
 
         self._last_import_dir = Path(path).parent
         self._save_last_import_dir(self._last_import_dir)
-        self.image_name.configure(text=Path(path).name)
+        self._start_processing(path=path, image_name=Path(path).name)
+
+    def _start_processing(
+        self,
+        *,
+        path: str | None = None,
+        image: Image.Image | None = None,
+        image_name: str,
+    ) -> None:
         self._job += 1
+        self._pending_image_name = image_name
         self._busy = True
         self.import_btn.state(["disabled"])
+        self.screenshot_btn.state(["disabled"])
         self._set_status("Reading barcodes…")
-        self._show_message("Working…")
         threading.Thread(
-            target=self._work, args=(self._job, path), daemon=True
+            target=self._work,
+            args=(self._job, path, image),
+            daemon=True,
         ).start()
         self.after(50, self._poll)
 
-    def _work(self, token: int, path: str) -> None:
+    def _work(
+        self, token: int, path: str | None, image: Image.Image | None
+    ) -> None:
         try:
-            img = load_image(path)
+            img = image if image is not None else load_image(path or "")
             found = decode_barcodes(img)
             self._queue.put((token, "ok", (img, found)))
         except ImageLoadError as exc:
@@ -366,14 +394,92 @@ class App(tk.Tk):
 
         self._busy = False
         self.import_btn.state(["!disabled"])
+        self.screenshot_btn.state(["!disabled"])
         if kind == "ok":
             img, found = payload
             self._preview_src = img
+            self.image_name.configure(text=self._pending_image_name)
             self._render_preview()
             self._show_results(found)
         else:
             self._set_status("Error", ERROR_FG)
-            self._show_message(payload, ERROR_FG)
+            self._set_status(payload, ERROR_FG)
+
+    # ---------- Screenshot flow ----------
+    def _on_screenshot(self) -> None:
+        if self._busy or self._selection_window is not None:
+            return
+        try:
+            screen = grab_screen()
+        except ScreenCaptureError as exc:
+            self._set_status(str(exc), ERROR_FG)
+            return
+
+        self._selection_image = screen
+        window = tk.Toplevel(self)
+        self._selection_window = window
+        window.overrideredirect(True)
+        window.attributes("-topmost", True)
+        window.geometry(f"{screen.width}x{screen.height}+0+0")
+        canvas = tk.Canvas(window, cursor="crosshair", highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        self._selection_canvas = canvas
+        self._selection_tk = ImageTk.PhotoImage(screen)
+        canvas.create_image(0, 0, image=self._selection_tk, anchor="nw")
+        canvas.bind("<ButtonPress-1>", self._start_selection)
+        canvas.bind("<B1-Motion>", self._update_selection)
+        canvas.bind("<ButtonRelease-1>", self._finish_selection)
+        window.bind("<Escape>", lambda _event: self._cancel_selection())
+        window.focus_force()
+
+    def _start_selection(self, event: tk.Event) -> None:
+        self._selection_start = (event.x, event.y)
+
+    def _update_selection(self, event: tk.Event) -> None:
+        if self._selection_canvas is None or self._selection_start is None:
+            return
+        self._selection_canvas.delete("selection")
+        x, y = self._selection_start
+        self._selection_canvas.create_rectangle(
+            x,
+            y,
+            event.x,
+            event.y,
+            outline="#ff0000",
+            width=2,
+            tags="selection",
+        )
+
+    def _finish_selection(self, event: tk.Event) -> None:
+        if self._selection_start is None or self._selection_image is None:
+            self._cancel_selection()
+            return
+        x, y = self._selection_start
+        region = (
+            min(x, event.x),
+            min(y, event.y),
+            max(x, event.x),
+            max(y, event.y),
+        )
+        screen = self._selection_image
+        try:
+            image = capture_screen_region(region, grabber=lambda: screen)
+        except ScreenCaptureError as exc:
+            self._cancel_selection()
+            self._set_status(str(exc), ERROR_FG)
+            return
+        self._cancel_selection()
+        if image is not None:
+            self._start_processing(image=image, image_name="Screenshot")
+
+    def _cancel_selection(self) -> None:
+        if self._selection_window is not None:
+            self._selection_window.destroy()
+        self._selection_window = None
+        self._selection_canvas = None
+        self._selection_start = None
+        self._selection_image = None
+        self._selection_tk = None
 
     # ---------- Results ----------
     def _show_results(self, found: list[BarcodeResult]) -> None:
