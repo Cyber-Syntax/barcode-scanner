@@ -1,5 +1,8 @@
 """Barcode decoding. Deliberately free of any GUI imports."""
 
+# Turkish user-facing messages intentionally use locale-specific characters.
+# ruff: noqa: RUF001
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -59,8 +62,8 @@ def load_image(path: str | Path) -> Image.Image:
     path = Path(path)
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise ImageLoadError(
-            f"Unsupported file type '{path.suffix}'. "
-            f"Use one of: {', '.join(SUPPORTED_EXTENSIONS)}."
+            f"Desteklenmeyen dosya türü: '{path.suffix}'. "
+            f"Şunlardan birini kullanın: {', '.join(SUPPORTED_EXTENSIONS)}."
         )
     try:
         with Image.open(path) as img:
@@ -68,10 +71,10 @@ def load_image(path: str | Path) -> Image.Image:
             img = ImageOps.exif_transpose(img)  # honor phone-camera rotation
             return img.convert("RGB")
     except FileNotFoundError:
-        raise ImageLoadError(f"File not found: {path.name}") from None
+        raise ImageLoadError(f"Dosya bulunamadı: {path.name}") from None
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise ImageLoadError(
-            f"Could not open '{path.name}' as an image ({exc})."
+            f"'{path.name}' görsel olarak açılamadı ({exc})."
         ) from exc
 
 
@@ -80,6 +83,24 @@ def _decode_value(raw: bytes) -> str:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         return raw.decode("latin-1")
+
+
+def sort_results(results: list[BarcodeResult]) -> list[BarcodeResult]:
+    """Return results in visual order, preserving decoder order for ties."""
+    return [
+        result
+        for _index, result in sorted(
+            enumerate(results), key=lambda item: (item[1].rect[1], item[1].rect[0], item[0])
+        )
+    ]
+
+
+def first_code128(results: list[BarcodeResult]) -> BarcodeResult | None:
+    """Return the first Code 128 in visual order, if one was detected."""
+    for result in sort_results(results):
+        if result.symbology == "Code 128":
+            return result
+    return None
 
 
 def decode_barcodes(image: Image.Image) -> list[BarcodeResult]:
@@ -117,5 +138,4 @@ def decode_barcodes(image: Image.Image) -> list[BarcodeResult]:
             rect = tuple(int(v / scale) for v in (r.left, r.top, r.width, r.height))
             results.append(BarcodeResult(sym, value, rect))  # type: ignore[arg-type]
 
-    results.sort(key=lambda r: (r.rect[1], r.rect[0]))  # top-to-bottom, left-to-right
-    return results
+    return sort_results(results)

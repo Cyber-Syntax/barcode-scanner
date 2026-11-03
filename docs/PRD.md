@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Build a lightweight Windows desktop application using Python that reads 1D barcodes from imported images and displays the decoded values.
+Build a lightweight Windows/Linux desktop application using Python that reads 1D barcodes from imported images and displays the decoded values.
 
 The goal is to replace manual barcode-reading tools with a simple GUI that lets employees import an image, view all detected barcodes, and copy each result individually.
 
@@ -20,7 +20,7 @@ The goal is to replace manual barcode-reading tools with a simple GUI that lets 
 
 - Provide an **Import Image** button.
 - Support common image formats: PNG, JPG, JPEG, and BMP.
-- Allow employees to select an image through the standard Windows file picker.
+- Allow employees to select an image through the standard platform file picker.
 - Display a preview of the imported image.
 - Allow employees to import another image without restarting the application.
 - Provide a user-triggered **Screenshot** action that captures a selected screen region.
@@ -52,7 +52,9 @@ Example:
 
 The example values are illustrative.
 
-Each Copy button must copy only its associated barcode value to the Windows clipboard. Display brief feedback after copying, such as "Copied!".
+Each Copy button must copy only its associated barcode value to the platform clipboard. After every successful scan, automatically copy the first visually ordered Code 128 value when present; preserve the clipboard when none is present. Display brief non-modal feedback: "Code 128 copied!" for 1.5 seconds.
+
+Sort displayed results in visual order: top-to-bottom, then left-to-right, preserving decoder order for ties.
 
 ### 3.4 Empty and Error States
 
@@ -74,13 +76,14 @@ Each Copy button must copy only its associated barcode value to the Windows clip
 
 ## 5. UI Requirements
 
-- Simple, clean Windows desktop interface.
+- Simple, clean Windows/Linux desktop interface with a minimum window size of 640x480.
 - Image preview area.
 - Clearly visible Import Image button.
 - Results list supporting multiple barcode detections.
 - Individual Copy button for every result.
 - Clear loading, success, empty, and error states.
 - Scrollable results area for images containing many barcodes.
+- Keep initial fit-to-preview behavior and support zooming with the mouse wheel; do not show zoom buttons.
 - No unnecessary configuration screens or complex workflows.
 
 ## 6. Technical Requirements
@@ -89,7 +92,7 @@ Each Copy button must copy only its associated barcode value to the Windows clip
 - GUI: Tkinter for a lightweight implementation, or PySide if a richer interface is justified.
 - Barcode decoding: `pyzbar` with ZBar.
 - Image handling: Pillow.
-- Clipboard: A reliable Windows-compatible clipboard implementation.
+- Clipboard: Tkinter platform clipboard; automatic Code 128 copy and manual per-result Copy buttons.
 - Packaging: PyInstaller to produce a standalone Windows executable.
 
 The barcode-decoding logic must be separated from the GUI so it can be tested independently and extended later.
@@ -118,10 +121,12 @@ The MVP is complete when:
 3. Every detected result displays its decoded value and barcode type.
 4. Every result has an individual Copy button.
 5. Copying a result places the exact decoded value on the clipboard.
-6. The GUI handles images with no barcodes without crashing.
-7. The GUI handles unreadable or invalid images with a clear error message.
-8. The employee can import a new image and repeat the workflow without restarting the application.
-9. The application can be packaged and launched as a Windows `.exe`.
+6. A successful scan automatically copies the first Code 128 in top-to-bottom, left-to-right visual order, with decoder order as the stable tie-break.
+7. If no Code 128 is detected, the existing clipboard is preserved.
+8. The GUI handles images with no barcodes without crashing.
+9. The GUI handles unreadable or invalid images with a clear error message.
+10. The employee can import a new image and repeat the workflow without restarting the application.
+11. The application can be packaged and launched as a Windows `.exe`.
 
 ## 9. Future Improvements
 

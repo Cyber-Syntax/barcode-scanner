@@ -1,7 +1,14 @@
 import pytest
 from barcode import EAN13, Code128
 from barcode.writer import ImageWriter
-from barcode_scanner.decoder import ImageLoadError, decode_barcodes, load_image
+from barcode_scanner.decoder import (
+    BarcodeResult,
+    ImageLoadError,
+    decode_barcodes,
+    first_code128,
+    load_image,
+    sort_results,
+)
 from PIL import Image
 
 
@@ -40,3 +47,27 @@ def test_unsupported_extension(tmp_path):
     p.write_bytes(b"GIF89a")
     with pytest.raises(ImageLoadError):
         load_image(p)
+
+
+def test_visual_order_uses_decoder_order_for_position_ties():
+    results = [
+        BarcodeResult("Code 128", "tie-first", (10, 20, 5, 5)),
+        BarcodeResult("Code 128", "lower", (5, 30, 5, 5)),
+        BarcodeResult("Code 128", "tie-second", (10, 20, 5, 5)),
+        BarcodeResult("EAN-13", "upper", (5, 10, 5, 5)),
+    ]
+
+    assert [r.value for r in sort_results(results)] == [
+        "upper", "tie-first", "tie-second", "lower"
+    ]
+
+
+def test_first_code128_follows_visual_order_and_preserves_no_match_policy():
+    results = [
+        BarcodeResult("Code 128", "right", (80, 10, 5, 5)),
+        BarcodeResult("EAN-13", "left", (10, 10, 5, 5)),
+        BarcodeResult("Code 128", "top", (5, 5, 5, 5)),
+    ]
+
+    assert first_code128(results).value == "top"
+    assert first_code128([results[1]]) is None
