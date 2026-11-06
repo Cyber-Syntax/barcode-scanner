@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import queue
 import threading
@@ -481,10 +482,10 @@ class App(tk.Tk):
             return
         x, y = self._selection_start
         region = (
-            round(min(x, event.x) * self._selection_scale[0]),
-            round(min(y, event.y) * self._selection_scale[1]),
-            round(max(x, event.x) * self._selection_scale[0]),
-            round(max(y, event.y) * self._selection_scale[1]),
+            math.floor(min(x, event.x) * self._selection_scale[0]),
+            math.floor(min(y, event.y) * self._selection_scale[1]),
+            math.ceil(max(x, event.x) * self._selection_scale[0]),
+            math.ceil(max(y, event.y) * self._selection_scale[1]),
         )
         screen = self._selection_image
         try:

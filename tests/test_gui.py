@@ -75,7 +75,7 @@ def test_screenshot_selection_maps_tk_coordinates_to_capture_pixels(
     monkeypatch,
 ):
     app = object.__new__(gui.App)
-    app._selection_start = (100, 200)
+    app._selection_start = (1, 1)
     app._selection_image = Image.new("RGB", (2880, 1620))
     app._selection_scale = (1.5, 1.5)
     app._selection_window = _FakeWindow(app)
@@ -92,7 +92,7 @@ def test_screenshot_selection_maps_tk_coordinates_to_capture_pixels(
     monkeypatch.setattr(gui, "capture_screen_region", fake_capture)
     monkeypatch.setattr(app, "_start_processing", lambda **_kwargs: None)
 
-    event = type("Event", (), {"x": 400, "y": 600})()
+    event = type("Event", (), {"x": 3, "y": 3})()
     app._finish_selection(event)
 
-    assert captured == [(150, 300, 600, 900)]
+    assert captured == [(1, 1, 5, 5)]
