@@ -93,7 +93,7 @@ class App(tk.Tk):
         style.configure("TLabelframe.Label", font=heading_font)
 
         self.title("Barkod Tarayıcı")
-        self.geometry("1200x900")
+        self.geometry("720x480")
         self.minsize(*MIN_WINDOW_SIZE)
 
         self._queue: queue.Queue = queue.Queue()
