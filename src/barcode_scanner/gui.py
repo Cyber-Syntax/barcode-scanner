@@ -109,6 +109,7 @@ class App(tk.Tk):
         self._selection_start: tuple[int, int] | None = None
         self._selection_image: Image.Image | None = None
         self._selection_tk: ImageTk.PhotoImage | None = None
+        self._selection_scale = (1.0, 1.0)
         self._pending_image_name = ""
 
         self._build_ui()
@@ -435,11 +436,20 @@ class App(tk.Tk):
         self._selection_window = window
         window.overrideredirect(True)
         window.attributes("-topmost", True)
-        window.geometry(f"{screen.width}x{screen.height}+0+0")
+        display_width = self.winfo_screenwidth()
+        display_height = self.winfo_screenheight()
+        window.geometry(f"{display_width}x{display_height}+0+0")
         canvas = tk.Canvas(window, cursor="crosshair", highlightthickness=0)
         canvas.pack(fill="both", expand=True)
         self._selection_canvas = canvas
-        self._selection_tk = ImageTk.PhotoImage(screen)
+        self._selection_scale = (
+            screen.width / display_width,
+            screen.height / display_height,
+        )
+        display_screen = screen.resize(
+            (display_width, display_height), Image.Resampling.LANCZOS
+        )
+        self._selection_tk = ImageTk.PhotoImage(display_screen)
         canvas.create_image(0, 0, image=self._selection_tk, anchor="nw")
         canvas.bind("<ButtonPress-1>", self._start_selection)
         canvas.bind("<B1-Motion>", self._update_selection)
@@ -471,10 +481,10 @@ class App(tk.Tk):
             return
         x, y = self._selection_start
         region = (
-            min(x, event.x),
-            min(y, event.y),
-            max(x, event.x),
-            max(y, event.y),
+            round(min(x, event.x) * self._selection_scale[0]),
+            round(min(y, event.y) * self._selection_scale[1]),
+            round(max(x, event.x) * self._selection_scale[0]),
+            round(max(y, event.y) * self._selection_scale[1]),
         )
         screen = self._selection_image
         try:
@@ -495,6 +505,7 @@ class App(tk.Tk):
         self._selection_start = None
         self._selection_image = None
         self._selection_tk = None
+        self._selection_scale = (1.0, 1.0)
 
     # ---------- Results ----------
     def _show_results(self, found: list[BarcodeResult]) -> None:
